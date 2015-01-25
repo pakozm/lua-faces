@@ -146,7 +146,7 @@ kb:defrule("Rule7"):
 
 -- show rule
 kb:defrule("Show"):
-  salicen(-10):
+  salience(-10):
   pattern{ ANIMAL_IS, "?x" }:
   ENTAILS("=>"):
   u(function(args,vars)
@@ -155,5 +155,4 @@ kb:defrule("Show"):
 
 ----------------------------------------------------------------------
 
-kb:agenda()
 kb:run()
