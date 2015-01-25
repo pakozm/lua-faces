@@ -85,3 +85,13 @@ kb:facts()
 
 kb:retract("*")
 kb:facts()
+
+local id = kb:fassert{ "duck sound", { "quack", 2 } }
+kb:agenda()
+kb:run()
+kb:facts()
+kb:retract(id)
+kb:fassert{ "duck sound", { "quack", 2 } }
+kb:agenda()
+kb:run()
+kb:facts()

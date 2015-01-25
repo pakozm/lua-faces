@@ -226,6 +226,7 @@ local function fire_rule(self, rule_name, args, vars)
   local rule = self.kb_table[rule_name]
   self.entailed[rule_name] = self.entailed[rule_name] or {}
   self.entailed[rule_name][args] = true
+  for i,v in ipairs(args) do self.fact_entailment[v] = args end
   -- execute rule actions
   for _,action in ipairs(rule.actions) do
     action(args, inmutable(vars))
@@ -259,7 +260,8 @@ local function update_forward_chaining_with_assert_fact(self, fact)
   local fid     = self.fact_map[fact]
   local matches = self.matches
   for rule_name,rule in pairs(self.kb_table) do
-    local rule_matches = matches[rule_name]
+    local rule_matches = matches[rule_name] or {}
+    matches[rule_name] = rule_matches
     for i,pat in ipairs(rule.patterns) do
       if fact_match(fact, pat) then
         rule_matches[i] = rule_matches[i] or {}
