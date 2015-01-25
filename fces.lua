@@ -371,6 +371,7 @@ function fces_methods:retract(...)
   for i=1,select('#',...) do
     local v = select(i,...)
     if v == "*" then
+      self.needs_regenerate_agenda = true
       -- retract all facts
       for idx,f in pairs(self.fact_list) do
         self.fact_list[idx] = nil
