@@ -28,9 +28,20 @@ local tuple = require "tuple"
 -- module fces
 local fces = {}
 
+local LAMBDA_MATCH = { tuple{ "USER" } }
+
 ----------------------
 -- STATIC FUNCTIONS --
 ----------------------
+
+-- converts to in-mutable the given table argument
+local function inmutable(tbl)
+  return setmetatable({}, {
+      __index = function(_,k) return tbl[k] end,
+      __newindex = function() error("Unable to modify an in-mutable table") end,
+      __len = function() return #tbl end,
+  })
+end
 
 -- pattern matching between a fact and the rule pattern
 local function fact_match(fact, pattern)
@@ -101,7 +112,7 @@ do
         local varname = v:match("%?([^%s]+)")
         if varname then
           local value = fact[j]
-          if not var_matches[varname] or value:find(var_matches[varname]) then
+          if not var_matches[varname] or var_matches[varname](value) then
             if not vars[varname] then
               vars[varname] = value
             else
@@ -122,9 +133,13 @@ do
 
   assign_variables = function(self, vars, patterns, sequence, var_matches)
     for i,pat in ipairs(patterns) do
-      local fid  = sequence[i]
-      local fact = self.fact_list[fid]
-      if not assign_fact_vars(vars, pat, fact, var_matches) then return false end
+      if type(pat) ~= "function" then
+        local fid  = sequence[i]
+        local fact = self.fact_list[fid]
+        if not assign_fact_vars(vars, pat, fact, var_matches) then return false end
+      else
+        if not pat(inmutable(vars)) then return false end
+      end
     end
     return true
   end
@@ -134,16 +149,18 @@ end
 -- (Cartesian product) between all the given array arguments
 local function enumerate(...)
   local function f(seq, tbl, ...)
-    if tbl == nil then
+    if tbl == nil and select('#', ...) == 0 then
       if #seq > 0 then coroutine.yield(tuple(seq)) end
     else
-      if #seq > 0 then
-        for i,v in ipairs(tbl) do
-          f(seq .. tuple(v), ...)
-        end
-      else
-        for i,v in ipairs(tbl) do
-          f(tuple{v}, ...)
+      if tbl ~= nil then
+        if #seq > 0 then
+          for i,v in ipairs(tbl) do
+            f(seq .. tuple(v), ...)
+          end
+        else
+          for i,v in ipairs(tbl) do
+            f(tuple{v}, ...)
+          end
         end
       end
     end
@@ -164,23 +181,25 @@ local function regenerate_agenda(self)
     local rule_entailements = entailed[rule_name] or {}
     local combinations = {}
     local variables = {}
-    for sequence in enumerate(table.unpack(matches[rule_name])) do
-      if not rule_entailements[sequence] then
-        local seq_vars = {}
-        if assign_variables(self, seq_vars, rule.patterns, sequence,
-                            rule.var_matches) then
-          table.insert(combinations, sequence)
-          table.insert(variables, seq_vars)
+    if #matches[rule_name] == #rule.patterns then
+      for sequence in enumerate(table.unpack(matches[rule_name])) do
+        if not rule_entailements[sequence] then
+          local seq_vars = {}
+          if assign_variables(self, seq_vars, rule.patterns, sequence,
+                              rule.var_matches) then
+            table.insert(combinations, sequence)
+            table.insert(variables, seq_vars)
+          end
         end
       end
-    end
-    if #combinations > 0 then
-      table.insert(agenda, {
-                     rule_name = rule_name,
-                     salience = rule.salience,
-                     combinations = combinations,
-                     variables = variables,
-      })
+      if #combinations > 0 then
+        table.insert(agenda, {
+                       rule_name = rule_name,
+                       salience = rule.salience,
+                       combinations = combinations,
+                       variables = variables,
+        })
+      end
     end
   end
   table.sort(agenda, function(a,b) return a.salience > b.salience end)
@@ -211,7 +230,7 @@ local function fire_rule(self, rule_name, args, vars)
   self.entailed[rule_name][args] = true
   -- execute rule actions
   for _,action in ipairs(rule.actions) do
-    action(args, vars)
+    action(args, inmutable(vars))
   end
 end
 
@@ -244,10 +263,14 @@ local function update_forward_chaining_with_assert_fact(self, fact)
   for rule_name,rule in pairs(self.kb_table) do
     local rule_matches = matches[rule_name]
     for i,pat in ipairs(rule.patterns) do
-      if fact_match(fact, pat) then
-        rule_matches[i] = rule_matches[i] or {}
-        table.insert(rule_matches[i], fid)
-        table.sort(rule_matches[i])
+      if type(pat) ~= "function" then
+        if fact_match(fact, pat) then
+          rule_matches[i] = rule_matches[i] or {}
+          table.insert(rule_matches[i], fid)
+          table.sort(rule_matches[i])
+        end
+      else
+        rule_matches[i] = LAMBDA_MATCH
       end
     end
   end
@@ -261,13 +284,17 @@ local function update_forward_chaining_with_retract_fact(self, fact)
   for rule_name,rule in pairs(self.kb_table) do
     local rule_matches = matches[rule_name]
     for i,pat in ipairs(rule.patterns) do
-      if bsearch(rule_matches[i], fid) then
-        new_rule_matches = {}
-        for j,v in ipairs(rule_matches[i]) do
-          if v ~= fid then table.insert(new_rule_matches, v) end
+      if type(pat) ~= "function" then
+        if bsearch(rule_matches[i], fid) then
+          new_rule_matches = {}
+          for j,v in ipairs(rule_matches[i]) do
+            if v ~= fid then table.insert(new_rule_matches, v) end
+          end
+          table.sort(new_rule_matches)
+          rule_matches[i] = new_rule_matches
         end
-        table.sort(new_rule_matches)
-        rule_matches[i] = new_rule_matches
+      else
+        rule_matches[i] = LAMBDA_MATCH
       end
     end
   end
@@ -284,12 +311,16 @@ local function update_forward_chaining_with_rule(self, rule_name, rule)
   local matches      = self.matches
   local rule_matches = {}
   for i,pat in ipairs(rule.patterns) do
-    for fid,fact in pairs(self.fact_list) do
-      if fact_match(fact, pat) then
-        rule_matches[i] = rule_matches[i] or {}
-        table.insert(rule_matches[i], fid)
-        table.sort(rule_matches[i])
+    if type(pat) ~= "function" then
+      for fid,fact in pairs(self.fact_list) do
+        if fact_match(fact, pat) then
+          rule_matches[i] = rule_matches[i] or {}
+          table.insert(rule_matches[i], fid)
+          table.sort(rule_matches[i])
+        end
       end
+    else
+      rule_matches[i] = LAMBDA_MATCH
     end
   end
   matches[rule_name] = rule_matches
@@ -446,6 +477,10 @@ function fces_methods:defrule(rule_name)
       table.insert(rule.patterns, tuple(pattern))
       return rule_builder
     end,
+    u = function(rule_builder, func)
+      table.insert(rule.patterns, func)
+      return rule_builder
+    end,
     salience = function(rule_builder, value)
       rule.salience = value
       return rule_builder
@@ -453,7 +488,17 @@ function fces_methods:defrule(rule_name)
     match = function(rule_builder, varname, value)
       varname = assert(varname:match("%?([^%s]+)"),
                        string.format("Incorrect variable name: %s", varname))
-      rule.var_matches[varname] = value
+      rule.var_matches[varname] = function(v)
+        return v:find(value)
+      end
+      return rule_builder
+    end,
+    numeric = function(rule_builder, varname)
+      varname = assert(varname:match("%?([^%s]+)"),
+                       string.format("Incorrect variable name: %s", varname))
+      rule.var_matches[varname] = function(v)
+        return type(v) == "number"
+      end
       return rule_builder
     end,
     ENTAILS = function(_, arg)
