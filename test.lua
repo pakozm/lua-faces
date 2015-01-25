@@ -62,9 +62,8 @@ kb:defrule("init"):
 kb:rules()
 kb:agenda()
 
-kb:run(1)
+kb:run()
 kb:agenda()
-kb:run(1)
 
 kb:facts()
 

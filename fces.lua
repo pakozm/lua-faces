@@ -52,49 +52,9 @@ local function check_fact_strings(fact)
   end
 end
 
--- look-ups for the rule with best salience, and returns the rule name and its
--- pattern matching arguments
-local function take_best_rule(self)
-  local rules_agenda = self.rules_agenda
-  if #rules_agenda > 0 then
-    local rule_data = rules_agenda[1]
-    local args = assert(table.remove(rule_data.combinations, 1),
-                        "Found empty LHS :'(")
-    if #rule_data.combinations == 0 then table.remove(rules_agenda, 1) end
-    local rule_name = rule_data.rule_name
-    return rule_name,args
-  end
-end
 
--- executes the given rule name with the given pattern matching arguments
-local function fire_rule(self, rule_name, args)
-  local rule = self.kb_table[rule_name]
-  self.entailed[rule_name] = self.entailed[rule_name] or {}
-  self.entailed[rule_name][args] = true
-  -- execute rule actions
-  for _,action in ipairs(rule.actions) do action(table.unpack(args)) end
-  --
-end
-
-local function bsearch(tbl, v, p, q)
-  p, q = p or 1, q or #tbl
-  if p <= q then
-    local n = q - p + 1
-    if n < 30 then
-      for i=p,q do if tbl[i] == v then return true end end
-    else
-      local m = math.floor((p+q)/2)
-      if tbl[m] == v then
-        return true
-      elseif v < tbl[m] then
-        return bsearch(tbl, v, p, m-1)
-      else
-        return bsearch(tbl, v, m+1, q)
-      end
-    end
-  end
-end
-
+-- returns an iterator function which enumerates all possible combinations
+-- (Cartesian product) between all the given array arguments
 local function enumerate(...)
   local function f(seq, tbl, ...)
     if tbl == nil then
@@ -115,7 +75,11 @@ local function enumerate(...)
   return coroutine.wrap(function() f({}, table.unpack(args)) end)
 end
 
+-- traverses all possible rules with all possible matches and introduces into
+-- the agenda whose clause sequences which weren't entailed before and are valid
+-- for the analyzed rule
 local function regenerate_agenda(self)
+  self.needs_regenerate_agenda = false
   local entailed = self.entailed
   local matches = self.matches
   local agenda = {}
@@ -127,16 +91,65 @@ local function regenerate_agenda(self)
         table.insert(combinations, sequence)
       end
     end
-    table.insert(agenda, {
-                   rule_name = rule_name,
-                   salience = rule.salience,
-                   combinations = combinations
-    })
+    if #combinations > 0 then
+      table.insert(agenda, {
+                     rule_name = rule_name,
+                     salience = rule.salience,
+                     combinations = combinations
+      })
+    end
   end
   table.sort(agenda, function(a,b) return a.salience > b.salience end)
   self.rules_agenda = agenda
 end
 
+-- look-ups for the rule with best salience, and returns the rule name and its
+-- pattern matching arguments
+local function take_best_rule(self)
+  if self.needs_regenerate_agenda then regenerate_agenda(self) end
+  local rules_agenda = self.rules_agenda
+  if #rules_agenda > 0 then
+    local rule_data = rules_agenda[1]
+    local args = assert(table.remove(rule_data.combinations, 1),
+                        "Found empty LHS :'(")
+    if #rule_data.combinations == 0 then table.remove(rules_agenda, 1) end
+    local rule_name = rule_data.rule_name
+    return rule_name,args
+  end
+end
+
+-- executes the given rule name with the given pattern matching arguments
+local function fire_rule(self, rule_name, args)
+  local rule = self.kb_table[rule_name]
+  self.entailed[rule_name] = self.entailed[rule_name] or {}
+  self.entailed[rule_name][args] = true
+  -- execute rule actions
+  for _,action in ipairs(rule.actions) do action(table.unpack(args)) end
+end
+
+-- binary search in a sorted array of numbers, where tbl is the array, v is the
+-- look-up value, p is the start position (by default it is 1) and q the end
+-- position (by default it is #tbl)
+local function bsearch(tbl, v, p, q)
+  p, q = p or 1, q or #tbl
+  if p <= q then
+    local n = q - p + 1
+    if n < 30 then
+      for i=p,q do if tbl[i] == v then return true end end
+    else
+      local m = math.floor((p+q)/2)
+      if tbl[m] == v then
+        return true
+      elseif v < tbl[m] then
+        return bsearch(tbl, v, p, m-1)
+      else
+        return bsearch(tbl, v, m+1, q)
+      end
+    end
+  end
+end
+
+-- updates possible matches with the information given by one new fact
 local function update_forward_chaining_with_assert_fact(self, fact)
   local fid     = self.fact_map[fact]
   local matches = self.matches
@@ -150,9 +163,10 @@ local function update_forward_chaining_with_assert_fact(self, fact)
       end
     end
   end
-  regenerate_agenda(self)
+  self.needs_regenerate_agenda = true
 end
 
+-- updates possible matches after retracting one fact
 local function update_forward_chaining_with_retract_fact(self, fact)
   local fid     = self.fact_map[fact]
   local matches = self.matches
@@ -173,9 +187,10 @@ local function update_forward_chaining_with_retract_fact(self, fact)
     self.entailed[sequence] = nil
   end
   self.fact_entailment[fid] = nil
-  regenerate_agenda(self)
+  self.needs_regenerate_agenda = true
 end
 
+-- updates possible matches after introducing a new rule
 local function update_forward_chaining_with_rule(self, rule_name, rule)
   local fid          = self.fact_map[fact]
   local matches      = self.matches
@@ -190,7 +205,7 @@ local function update_forward_chaining_with_rule(self, rule_name, rule)
     end
   end
   matches[rule_name] = rule_matches
-  regenerate_agenda(self)
+  self.needs_regenerate_agenda = true
 end
 
 -------------
@@ -199,7 +214,9 @@ end
 
 local fces_methods = {}
 
+-- initializes the facts database
 function fces_methods:clear()
+  self.needs_regenerate_agenda = false
   -- counter index
   self.fact_idx = 0
   -- global memory for data
@@ -220,6 +237,7 @@ function fces_methods:clear()
   self:fassert{ "initial fact" }
 end
 
+-- introduces a new fact into the database
 function fces_methods:fassert(fact, ...)
   if fact ~= nil then
     assert(type(fact) == "table", "A table argument is expected")
@@ -239,6 +257,7 @@ function fces_methods:fassert(fact, ...)
   end
 end
 
+-- removes a fact from the database
 function fces_methods:retract(...)
   for i=1,select('#',...) do
     local v = select(i,...)
@@ -269,6 +288,7 @@ function fces_methods:retract(...)
   end
 end
 
+-- shows in screen all the available facts
 function fces_methods:facts()
   local facts = {}
   for i,v in pairs(self.fact_list) do
@@ -282,6 +302,7 @@ function fces_methods:facts()
   print(string.format("# For a total of %d facts", #facts))
 end
 
+-- shows in screen all the available rules
 function fces_methods:rules()
   local rules = {}
   for i,v in pairs(self.kb_table) do
@@ -294,7 +315,9 @@ function fces_methods:rules()
   end
 end
 
+-- shows the agenda in screen
 function fces_methods:agenda()
+  if self.needs_regenerate_agenda then regenerate_agenda(self) end
   print("# Agenda")
   local n=0
   for _,v in ipairs(self.rules_agenda) do
@@ -309,6 +332,7 @@ function fces_methods:agenda()
   print(string.format("# For a total of %d activations", n))
 end
 
+-- executes at most n iterations, being by default n=infinity
 function fces_methods:run(n)
   n = n or math.huge
   local i=0
@@ -318,12 +342,14 @@ function fces_methods:run(n)
   until i==n or not rule_name
 end
 
+-- returns the fact related to the given fact id
 function fces_methods:consult(fid)
   local fact = assert(self.fact_list[fid],
                       "Unable to find fact with index " .. tostring(fid))
   return fact
 end
 
+-- declares a new rule in the knowledge base
 function fces_methods:defrule(rule_name)
   local rule = { patterns={}, actions={}, salience=0 }
   self.kb_table[rule_name] = rule
