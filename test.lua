@@ -53,6 +53,16 @@ kb:defrule("duck"):
   ENTAILS("=>"):
   fassert{ "sound is", "quack" }
 
+kb:fassert{ "duck sound", { "quack", "quock" } }
+kb:fassert{ "duck sound", "poww" }
+
+kb:defrule("duck2"):
+  salience(100):
+  pattern{ "duck sound", { "?name1", "?name2" } }:
+  match("?name1", "q.*"):
+  ENTAILS("=>"):
+  fassert{ "sound is", { "?name1", "?name2" } }
+
 kb:defrule("init"):
   salience(1000):
   pattern{ "initial fact" }:
@@ -62,9 +72,12 @@ kb:defrule("init"):
 kb:rules()
 kb:agenda()
 
+kb:run(2)
+kb:agenda()
+kb:facts()
+
 kb:run()
 kb:agenda()
-
 kb:facts()
 
 kb:retract("*")

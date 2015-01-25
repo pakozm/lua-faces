@@ -34,8 +34,13 @@ local fces = {}
 
 -- pattern matching between a fact and the rule pattern
 local function fact_match(fact, pattern)
+  if #fact ~= #pattern then return false end
   local fact_str = tostring(fact)
-  local pat_str = tostring(pattern):gsub("%.", "[^,]")
+  local pat_str = tostring(pattern):gsub("%.", "[^,]"):gsub("%?[^%s,]+", "[^,]*")
+  assert(not pat_str:find("%?"),
+         string.format("Incorrect variable name in pattern: %s",
+                       tostring(pattern)))
+  -- print(fact_str, pat_str, fact_str:find(pat_str))
   return fact_str:find(pat_str)
 end
 
@@ -47,18 +52,90 @@ local function check_fact_strings(fact)
       check_fact_strings(fact[i])
     elseif tt == "string" then
       assert(not fact[i]:find("[%.%-%,%+%?%(%)%{%}%[%]]"),
-             "Forbidden use of the following symbols: . - , + ? ( ) { } [ ]")
+             string.format("Forbidden use of the following symbols in fact '%s': . - , + ? ( ) { } [ ]",
+                           tostring(tuple(fact))))
     end
   end
 end
 
+-- forward declaration
+local replace_variables
+do
+  local function replace(vi, vars)
+    local new_v = {}
+    for j,vj in ipairs(vi) do
+      local tt = type(vj)
+      if tt == "string" then
+        local varname = vj:match("%?([^%s]+)")
+        if varname then
+          new_v[j] = assert(vars[varname],
+                            string.format("Unable to find variable: %s", varname))
+        else
+          new_v[j] = vj
+        end
+      elseif tt == "table" then
+        new_v[j] = replace(vj, vars)
+      else
+        new_v[j] = vj
+      end
+    end
+    return new_v
+  end
+
+  replace_variables = function(args, vars)
+    local new_args = {}
+    for i,vi in ipairs(args) do
+      new_args[i] = replace(vi, vars)
+    end
+    return new_args
+  end
+end
+
+-- forward declaration
+local assign_variables
+do
+  local function assign_fact_vars(vars, pat, fact, var_matches)
+    for j,v in ipairs(pat) do
+      local tt = type(v)
+      if tt == "string" then
+        local varname = v:match("%?([^%s]+)")
+        if varname then
+          local value = fact[j]
+          if not var_matches[varname] or value:find(var_matches[varname]) then
+            if not vars[varname] then
+              vars[varname] = value
+            else
+              if vars[varname] ~= value then return false end
+            end
+          else
+            return false
+          end
+        end
+      elseif tt == "table" then
+        if not assign_fact_vars(vars, v, fact[j], var_matches) then
+          return false
+        end
+      end
+    end
+    return true
+  end
+
+  assign_variables = function(self, vars, patterns, sequence, var_matches)
+    for i,pat in ipairs(patterns) do
+      local fid  = sequence[i]
+      local fact = self.fact_list[fid]
+      if not assign_fact_vars(vars, pat, fact, var_matches) then return false end
+    end
+    return true
+  end
+end
 
 -- returns an iterator function which enumerates all possible combinations
 -- (Cartesian product) between all the given array arguments
 local function enumerate(...)
   local function f(seq, tbl, ...)
     if tbl == nil then
-      coroutine.yield(tuple(seq))
+      if #seq > 0 then coroutine.yield(tuple(seq)) end
     else
       if #seq > 0 then
         for i,v in ipairs(tbl) do
@@ -86,16 +163,23 @@ local function regenerate_agenda(self)
   for rule_name,rule in pairs(self.kb_table) do
     local rule_entailements = entailed[rule_name] or {}
     local combinations = {}
+    local variables = {}
     for sequence in enumerate(table.unpack(matches[rule_name])) do
       if not rule_entailements[sequence] then
-        table.insert(combinations, sequence)
+        local seq_vars = {}
+        if assign_variables(self, seq_vars, rule.patterns, sequence,
+                            rule.var_matches) then
+          table.insert(combinations, sequence)
+          table.insert(variables, seq_vars)
+        end
       end
     end
     if #combinations > 0 then
       table.insert(agenda, {
                      rule_name = rule_name,
                      salience = rule.salience,
-                     combinations = combinations
+                     combinations = combinations,
+                     variables = variables,
       })
     end
   end
@@ -111,20 +195,24 @@ local function take_best_rule(self)
   if #rules_agenda > 0 then
     local rule_data = rules_agenda[1]
     local args = assert(table.remove(rule_data.combinations, 1),
-                        "Found empty LHS :'(")
+                        "Found empty LHS args :'(")
+    local vars = assert(table.remove(rule_data.variables, 1),
+                        "Found empty LHS vars :'(")
     if #rule_data.combinations == 0 then table.remove(rules_agenda, 1) end
     local rule_name = rule_data.rule_name
-    return rule_name,args
+    return rule_name,args,vars
   end
 end
 
 -- executes the given rule name with the given pattern matching arguments
-local function fire_rule(self, rule_name, args)
+local function fire_rule(self, rule_name, args, vars)
   local rule = self.kb_table[rule_name]
   self.entailed[rule_name] = self.entailed[rule_name] or {}
   self.entailed[rule_name][args] = true
   -- execute rule actions
-  for _,action in ipairs(rule.actions) do action(table.unpack(args)) end
+  for _,action in ipairs(rule.actions) do
+    action(args, vars)
+  end
 end
 
 -- binary search in a sorted array of numbers, where tbl is the array, v is the
@@ -337,9 +425,9 @@ function fces_methods:run(n)
   n = n or math.huge
   local i=0
   repeat
-    local rule_name,args = take_best_rule(self)
-    if rule_name then fire_rule(self, rule_name, args) i = i+1 end
-  until i==n or not rule_name
+    local data = table.pack( take_best_rule(self) )
+    if data[1] then fire_rule(self, table.unpack(data) ) i = i+1 end
+  until i==n or not data[1]
 end
 
 -- returns the fact related to the given fact id
@@ -351,7 +439,7 @@ end
 
 -- declares a new rule in the knowledge base
 function fces_methods:defrule(rule_name)
-  local rule = { patterns={}, actions={}, salience=0 }
+  local rule = { patterns={}, actions={}, salience=0, var_matches = {} }
   self.kb_table[rule_name] = rule
   local rule_builder = {
     pattern = function(rule_builder, pattern)
@@ -362,6 +450,12 @@ function fces_methods:defrule(rule_name)
       rule.salience = value
       return rule_builder
     end,
+    match = function(rule_builder, varname, value)
+      varname = assert(varname:match("%?([^%s]+)"),
+                       string.format("Incorrect variable name: %s", varname))
+      rule.var_matches[varname] = value
+      return rule_builder
+    end,
     ENTAILS = function(_, arg)
       assert(arg == "=>", "ENTAILS needs '=>' string as argument")
       update_forward_chaining_with_rule(self, rule_name, rule)
@@ -369,6 +463,7 @@ function fces_methods:defrule(rule_name)
           __index = function(rule_builder, key)
             if key == "u" then
               return function(rule_builder, user_func)
+                -- user_func receives two arguments (fact_ids, vars)
                 table.insert(rule.actions, user_func)
                 return rule_builder
               end
@@ -378,8 +473,9 @@ function fces_methods:defrule(rule_name)
                 local args = table.pack(...)
                 for i=1,args.n do args[i] = tuple(args[i]) end
                 table.insert(rule.actions,
-                             function()
-                               return self[key](self, table.unpack(args))
+                             function(fact_ids, vars)
+                               local new_args = replace_variables(args, vars)
+                               return self[key](self, table.unpack(new_args))
                 end)
                 return rule_builder
               end
