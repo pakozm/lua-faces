@@ -1,5 +1,5 @@
 --[[
-  This file is part of Lua-FCES (https://github.com/pakozm/lua-fces)
+  This file is part of Lua-FaCES (https://github.com/pakozm/lua-faces)
 
   Copyright 2015, Francisco Zamora-Martinez
   
@@ -24,8 +24,8 @@
 
 local tuple = require "tuple"
 
--- module fces
-local fces = {}
+-- module faces
+local faces = {}
 
 ----------------------
 -- STATIC FUNCTIONS --
@@ -323,10 +323,10 @@ end
 -- METHODS --
 -------------
 
-local fces_methods = {}
+local faces_methods = {}
 
 -- initializes the facts database
-function fces_methods:clear()
+function faces_methods:clear()
   self.needs_regenerate_agenda = false
   -- counter index
   self.fact_idx = 0
@@ -349,7 +349,7 @@ function fces_methods:clear()
 end
 
 -- introduces a new fact into the database
-function fces_methods:fassert(fact, ...)
+function faces_methods:fassert(fact, ...)
   if fact ~= nil then
     assert(type(fact) == "table", "A table argument is expected")
     check_fact_strings(fact)
@@ -369,7 +369,7 @@ function fces_methods:fassert(fact, ...)
 end
 
 -- removes a fact from the database
-function fces_methods:retract(...)
+function faces_methods:retract(...)
   for i=1,select('#',...) do
     local v = select(i,...)
     if v == "*" then
@@ -401,7 +401,7 @@ function fces_methods:retract(...)
 end
 
 -- shows in screen all the available facts
-function fces_methods:facts()
+function faces_methods:facts()
   local facts = {}
   for i,v in pairs(self.fact_list) do
     table.insert(facts, {i,v})
@@ -415,7 +415,7 @@ function fces_methods:facts()
 end
 
 -- shows in screen all the available rules
-function fces_methods:rules()
+function faces_methods:rules()
   local rules = {}
   for i,v in pairs(self.kb_table) do
     table.insert(rules, {i,v})
@@ -428,7 +428,7 @@ function fces_methods:rules()
 end
 
 -- shows the agenda in screen
-function fces_methods:agenda()
+function faces_methods:agenda()
   if self.needs_regenerate_agenda then regenerate_agenda(self) end
   print("# Agenda")
   local n=0
@@ -445,7 +445,7 @@ function fces_methods:agenda()
 end
 
 -- executes at most n iterations, being by default n=infinity
-function fces_methods:run(n)
+function faces_methods:run(n)
   n = n or math.huge
   local i=0
   repeat
@@ -455,14 +455,14 @@ function fces_methods:run(n)
 end
 
 -- returns the fact related to the given fact id
-function fces_methods:consult(fid)
+function faces_methods:consult(fid)
   local fact = assert(self.fact_list[fid],
                       "Unable to find fact with index " .. tostring(fid))
   return fact
 end
 
 -- declares a new rule in the knowledge base
-function fces_methods:defrule(rule_name)
+function faces_methods:defrule(rule_name)
   local rule = { patterns={}, user_clauses = {},
                  actions={}, salience=0, var_matches = {} }
   self.kb_table[rule_name] = rule
@@ -533,22 +533,22 @@ end
 -----------------
 
 --
-local fces_metatable = {
-  __index = fces_methods,
+local faces_metatable = {
+  __index = faces_methods,
 }
 
--- calling fces table returns a new rule-based expert system
-setmetatable(fces, {
+-- calling faces table returns a new rule-based expert system
+setmetatable(faces, {
                __call = function()
                  local t = {
                    -- knowledge-base table, contains all the rules
                    kb_table = {},
                  }
-                 local t = setmetatable(t, fces_metatable)
+                 local t = setmetatable(t, faces_metatable)
                  t:clear()
                  return t
                end
 })
 
 -- returns module table
-return fces
+return faces

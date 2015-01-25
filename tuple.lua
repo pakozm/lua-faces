@@ -1,5 +1,5 @@
 --[[
-  This file is part of Lua-FCES (https://github.com/pakozm/lua-fces)
+  This file is part of Lua-FaCES (https://github.com/pakozm/lua-faces)
   This file is part of Lua-Tuple (https://github.com/pakozm/lua-tuple)
   This file is part of Lua-MapReduce (https://github.com/pakozm/lua-mapreduce)
   

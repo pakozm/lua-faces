@@ -1,5 +1,5 @@
 --[[
-  This file is part of Lua-FCES (https://github.com/pakozm/lua-fces)
+  This file is part of Lua-FACES (https://github.com/pakozm/lua-faces)
 
   Copyright 2015, Francisco Zamora-Martinez
   
@@ -22,8 +22,8 @@
   IN THE SOFTWARE.
 ]]
 
-local fces = require "fces"
-local kb = fces()
+local faces = require "faces"
+local kb = faces()
 local pack = table.pack
 
 print( kb:fassert{ "duck" } )

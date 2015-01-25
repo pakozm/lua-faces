@@ -1,5 +1,5 @@
-local fces = require "fces"
-local kb = fces()
+local faces = require "faces"
+local kb = faces()
 
 -- Taken from: http://web.missouri.edu/jonassend/courses/mindtool/expert/MAM.KB
 -- A simple knowledge base to guide you in the identification of animals

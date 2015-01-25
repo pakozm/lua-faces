@@ -1,5 +1,5 @@
-local fces = require "fces"
-local kb = fces()
+local faces = require "faces"
+local kb = faces()
 
 kb:retract('*')
 kb:fassert{ "duck", 4 }
