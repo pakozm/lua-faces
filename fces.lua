@@ -500,6 +500,8 @@ function fces_methods:defrule(rule_name)
                 table.insert(rule.actions, user_func)
                 return rule_builder
               end
+            elseif key ~= "fassert" then
+              error("Only fassert is allowed out of user defined RHS clause")
             else
               local f = assert(self[key], "Undefined function " .. key)
               return function(rule_builder, ...)

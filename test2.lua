@@ -9,9 +9,9 @@ kb:fassert{ "AnimalIs", "duck" }
 kb:defrule("user"):
   pattern{ "?x", "?y" }:
   pattern{ "?z" }:
+  pattern{ "AnimalIs", "?x" }:
   numeric("?y"):
   numeric("?z"):
-  pattern{ "AnimalIs", "?x" }:
   u(function(vars)
       return (vars.z == vars.y*4) and (vars.y % 2)==0
   end):
