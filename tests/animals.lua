@@ -82,7 +82,7 @@ kb:defrule("RetractError"):
   pattern{ ANIMAL_IS, ".*" }:
   ENTAILS("=>"):
   u(function(fact_ids, vars)
-      kb:retract(args[1])
+      kb:retract(fact_ids[1])
   end)
 
 -- Initial rule, asks the first question
