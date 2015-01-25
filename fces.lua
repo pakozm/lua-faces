@@ -278,13 +278,15 @@ local function update_forward_chaining_with_retract_fact(self, fact)
   for rule_name,rule in pairs(self.kb_table) do
     local rule_matches = matches[rule_name]
     for i,pat in ipairs(rule.patterns) do
-      if bsearch(rule_matches[i], fid) then
-        new_rule_matches = {}
-        for j,v in ipairs(rule_matches[i]) do
-          if v ~= fid then table.insert(new_rule_matches, v) end
+      if rule_matches[i] then
+        if bsearch(rule_matches[i], fid) then
+          new_rule_matches = {}
+          for j,v in ipairs(rule_matches[i]) do
+            if v ~= fid then table.insert(new_rule_matches, v) end
+          end
+          table.sort(new_rule_matches)
+          rule_matches[i] = new_rule_matches
         end
-        table.sort(new_rule_matches)
-        rule_matches[i] = new_rule_matches
       end
     end
   end
