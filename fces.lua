@@ -28,8 +28,6 @@ local tuple = require "tuple"
 -- module fces
 local fces = {}
 
-local LAMBDA_MATCH = { tuple{ "USER" } }
-
 ----------------------
 -- STATIC FUNCTIONS --
 ----------------------
@@ -131,15 +129,16 @@ do
     return true
   end
 
-  assign_variables = function(self, vars, patterns, sequence, var_matches)
+  assign_variables = function(self, vars, patterns, sequence, var_matches,
+                              user_clauses)
     for i,pat in ipairs(patterns) do
-      if type(pat) ~= "function" then
-        local fid  = sequence[i]
-        local fact = self.fact_list[fid]
-        if not assign_fact_vars(vars, pat, fact, var_matches) then return false end
-      else
-        if not pat(inmutable(vars)) then return false end
-      end
+      local fid  = sequence[i]
+      local fact = self.fact_list[fid]
+      if not assign_fact_vars(vars, pat, fact, var_matches) then return false end
+    end
+    local inmutable_vars = inmutable(vars)
+    for _,func in ipairs(user_clauses) do
+      if not func(inmutable_vars) then return false end
     end
     return true
   end
@@ -186,7 +185,7 @@ local function regenerate_agenda(self)
         if not rule_entailements[sequence] then
           local seq_vars = {}
           if assign_variables(self, seq_vars, rule.patterns, sequence,
-                              rule.var_matches) then
+                              rule.var_matches, rule.user_clauses) then
             table.insert(combinations, sequence)
             table.insert(variables, seq_vars)
           end
@@ -263,14 +262,10 @@ local function update_forward_chaining_with_assert_fact(self, fact)
   for rule_name,rule in pairs(self.kb_table) do
     local rule_matches = matches[rule_name]
     for i,pat in ipairs(rule.patterns) do
-      if type(pat) ~= "function" then
-        if fact_match(fact, pat) then
-          rule_matches[i] = rule_matches[i] or {}
-          table.insert(rule_matches[i], fid)
-          table.sort(rule_matches[i])
-        end
-      else
-        rule_matches[i] = LAMBDA_MATCH
+      if fact_match(fact, pat) then
+        rule_matches[i] = rule_matches[i] or {}
+        table.insert(rule_matches[i], fid)
+        table.sort(rule_matches[i])
       end
     end
   end
@@ -284,17 +279,13 @@ local function update_forward_chaining_with_retract_fact(self, fact)
   for rule_name,rule in pairs(self.kb_table) do
     local rule_matches = matches[rule_name]
     for i,pat in ipairs(rule.patterns) do
-      if type(pat) ~= "function" then
-        if bsearch(rule_matches[i], fid) then
-          new_rule_matches = {}
-          for j,v in ipairs(rule_matches[i]) do
-            if v ~= fid then table.insert(new_rule_matches, v) end
-          end
-          table.sort(new_rule_matches)
-          rule_matches[i] = new_rule_matches
+      if bsearch(rule_matches[i], fid) then
+        new_rule_matches = {}
+        for j,v in ipairs(rule_matches[i]) do
+          if v ~= fid then table.insert(new_rule_matches, v) end
         end
-      else
-        rule_matches[i] = LAMBDA_MATCH
+        table.sort(new_rule_matches)
+        rule_matches[i] = new_rule_matches
       end
     end
   end
@@ -311,16 +302,12 @@ local function update_forward_chaining_with_rule(self, rule_name, rule)
   local matches      = self.matches
   local rule_matches = {}
   for i,pat in ipairs(rule.patterns) do
-    if type(pat) ~= "function" then
-      for fid,fact in pairs(self.fact_list) do
-        if fact_match(fact, pat) then
-          rule_matches[i] = rule_matches[i] or {}
-          table.insert(rule_matches[i], fid)
-          table.sort(rule_matches[i])
-        end
+    for fid,fact in pairs(self.fact_list) do
+      if fact_match(fact, pat) then
+        rule_matches[i] = rule_matches[i] or {}
+        table.insert(rule_matches[i], fid)
+        table.sort(rule_matches[i])
       end
-    else
-      rule_matches[i] = LAMBDA_MATCH
     end
   end
   matches[rule_name] = rule_matches
@@ -470,7 +457,8 @@ end
 
 -- declares a new rule in the knowledge base
 function fces_methods:defrule(rule_name)
-  local rule = { patterns={}, actions={}, salience=0, var_matches = {} }
+  local rule = { patterns={}, user_clauses = {},
+                 actions={}, salience=0, var_matches = {} }
   self.kb_table[rule_name] = rule
   local rule_builder = {
     pattern = function(rule_builder, pattern)
@@ -478,7 +466,7 @@ function fces_methods:defrule(rule_name)
       return rule_builder
     end,
     u = function(rule_builder, func)
-      table.insert(rule.patterns, func)
+      table.insert(rule.user_clauses, func)
       return rule_builder
     end,
     salience = function(rule_builder, value)
