@@ -53,7 +53,7 @@ kb:defrule("duck"):
   ENTAILS("=>"):
   fassert{ "sound is", "quack" }
 
-kb:fassert{ "duck sound", { "quack", "quock" } }
+kb:fassert{ "duck sound", { "quack", 2 } }
 kb:fassert{ "duck sound", "poww" }
 
 kb:defrule("duck2"):

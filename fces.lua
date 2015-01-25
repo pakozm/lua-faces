@@ -35,8 +35,8 @@ local fces = {}
 -- pattern matching between a fact and the rule pattern
 local function fact_match(fact, pattern)
   if #fact ~= #pattern then return false end
-  local fact_str = tostring(fact)
-  local pat_str = tostring(pattern):gsub("%.", "[^,]"):gsub("%?[^%s,]+", "[^,]*")
+  local fact_str = tostring(fact):gsub('"', '')
+  local pat_str = tostring(pattern):gsub("%.", "[^,]"):gsub('"', ''):gsub("%?[^%s,]+", "[^,]*")
   assert(not pat_str:find("%?"),
          string.format("Incorrect variable name in pattern: %s",
                        tostring(pattern)))
