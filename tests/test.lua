@@ -95,3 +95,13 @@ kb:fassert{ "duck sound", { "quack", 2 } }
 kb:agenda()
 kb:run()
 kb:facts()
+
+kb:defrule("MultiValuated"):
+  pattern{ "duck sound", "$?p" }:
+  ENTAILS("=>"):
+  u(function(fact_ids, vars)
+      print(vars.p)
+  end)
+kb:agenda()
+
+kb:run()

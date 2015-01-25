@@ -44,7 +44,9 @@ end
 local function fact_match(fact, pattern)
   if #fact ~= #pattern then return false end
   local fact_str = tostring(fact):gsub('"', '')
-  local pat_str = tostring(pattern):gsub("%.", "[^,]"):gsub('"', ''):gsub("%?[^%s,]+", "[^,]*")
+  local pat_str = tostring(pattern):gsub("%.", "[^,]"):gsub('"', ''):
+    gsub("%$%?[^%s,]+", "tuple%%b{}"):gsub("%?[^%s,]+", "[^,]*")
+  -- print(fact_str, pat_str, fact_str:find(pat_str))
   assert(not pat_str:find("%?"),
          string.format("Incorrect variable name in pattern: %s",
                        tostring(pattern)))
@@ -59,8 +61,8 @@ local function check_fact_strings(fact)
     if tt == "table" then
       check_fact_strings(fact[i])
     elseif tt == "string" then
-      assert(not fact[i]:find("[%.%-%,%+%?%(%)%{%}%[%]]"),
-             string.format("Forbidden use of the following symbols in fact '%s': . - , + ? ( ) { } [ ]",
+      assert(not fact[i]:find("[%$%.%-%,%+%?%(%)%{%}%[%]]"),
+             string.format("Forbidden use of the following symbols in fact '%s': $ . - , + ? ( ) { } [ ]",
                            tostring(tuple(fact))))
     end
   end
@@ -137,7 +139,7 @@ do
     end
     local inmutable_vars = inmutable(vars)
     for _,func in ipairs(user_clauses) do
-      if not func(inmutable_vars) then return false end
+      if not func(sequence, inmutable_vars) then return false end
     end
     return true
   end

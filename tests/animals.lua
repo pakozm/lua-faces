@@ -81,7 +81,7 @@ kb:defrule("RetractError"):
   pattern{ "ERROR" }:
   pattern{ ANIMAL_IS, ".*" }:
   ENTAILS("=>"):
-  u(function(args, vars)
+  u(function(fact_ids, vars)
       kb:retract(args[1])
   end)
 
@@ -149,7 +149,7 @@ kb:defrule("Show"):
   salience(-10):
   pattern{ ANIMAL_IS, "?x" }:
   ENTAILS("=>"):
-  u(function(args,vars)
+  u(function(fact_ids,vars)
       print("The animal is a: " .. vars.x)
   end)
 

@@ -4,11 +4,11 @@ local kb = fces()
 kb:defrule("expand"):
   salience(100):
   pattern{ "Factorial", "?x" }:
-  u(function(vars)
+  u(function(fact_ids, vars)
       return vars.x > 1
   end):
   ENTAILS("=>"):
-  u(function(args, vars)
+  u(function(fact_ids, vars)
       kb:fassert{ "Factorial", vars.x-1 }
   end)
 
@@ -16,11 +16,11 @@ kb:defrule("compute"):
   salience(0):
   pattern{ "Factorial", "?x" }:
   pattern{ "Result", "?y", "?z" }:
-  u(function(vars)
+  u(function(fact_ids, vars)
       return vars.x == vars.y+1
   end):
   ENTAILS("=>"):
-  u(function(args, vars)
+  u(function(fact_ids, vars)
       kb:fassert{ "Result", vars.x, vars.x * vars.z }
   end)
 
