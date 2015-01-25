@@ -22,7 +22,6 @@
   IN THE SOFTWARE.
 ]]
 
-package.path = package.path .. ";" .. arg[0]:gsub("[^/]+.lua", "?.lua")
 local tuple = require "tuple"
 
 -- module fces
