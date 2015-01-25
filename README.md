@@ -1,2 +1,2 @@
-# Lua-FCES
-Lua-FCES is a forward chaining expert system written in Lua programming language
+# Lua-FaCES
+Lua-FaCES is a forward chaining expert system development tool written in Lua programming language.
