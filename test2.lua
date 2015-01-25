@@ -16,7 +16,7 @@ kb:defrule("user"):
       return (vars.z == vars.y*4) and (vars.y % 2)==0
   end):
   ENTAILS("=>"):
-  fassert{ "EvenAnimal", "?x" }
+  fassert{ "EvenAnimal", "?x", "?y", "?z" }
 
 kb:rules()
 kb:agenda()
