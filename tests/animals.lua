@@ -93,10 +93,7 @@ kb:defrule("initial"):
 
 -- Control rule, asks question 2 in case it is necessary
 kb:defrule("Control"):
-  pattern{ BODY_COVERING, '?x' }:
-  u(function(vars)
-      return vars.x == FEATHERS or vars.x == SCALES
-  end):
+  pattern{ BODY_COVERING, SCALES }:
   ENTAILS("=>"):
   u(question2)
 
@@ -109,7 +106,6 @@ kb:defrule("Rule1"):
 -- If it has feathers then it is a bird
 kb:defrule("Rule2"):
   pattern{ BODY_COVERING, FEATHERS }:
-  pattern{ HAVE_FINS, NO }:
   ENTAILS("=>"):
   fassert(d2)
 
@@ -121,7 +117,7 @@ kb:defrule("Rule3"):
 
 -- If it has scales & fins it is a fish, and asks question 3
 kb:defrule("Rule4"):
-  pattern{ BODY_COVERING, FEATHERS }:
+  pattern{ BODY_COVERING, SCALES }:
   pattern{ HAVE_FINS, YES }:
   ENTAILS("=>"):
   fassert(d3):
