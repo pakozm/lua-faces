@@ -231,15 +231,16 @@ part of the rule:
 
 ```Lua
 > kb:defrule("retract_all"):
-    var("?f"):pattern{ ".*" }:
+    var("?f"):pattern{ "Limit", 10 }:
     ENTAILS("=>"):
-    retract(u("f"))
+    retract(u("f")):
+    fassert{ "Limit", 12 }
 > kb:run()
 > kb:facts()
 # Facts list
 f-1	tuple{ "initial fact" }
 f-2	tuple{ "Factorial", 1, 1 }
-f-4	tuple{ "Limit", 20 }
+f-4	tuple{ "Limit", 12 }
 f-5	tuple{ "Factorial", 2, 2 }
 f-6	tuple{ "Factorial", 3, 6 }
 f-7	tuple{ "Factorial", 4, 24 }
