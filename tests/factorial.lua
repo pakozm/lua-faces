@@ -1,31 +1,16 @@
 local faces = require "faces"
 local kb = faces()
 
-kb:defrule("expand"):
-  salience(100):
-  pattern{ "Factorial", "?x" }:
-  u(function(vars)
-      return vars.x > 1
-  end):
-  ENTAILS("=>"):
-  u(function(vars)
-      kb:fassert{ "Factorial", vars.x-1 }
-  end)
+kb:defrule"factorial":
+  pattern{ "Factorial", "?x", "?y" }:
+  pattern{ "Limit", "?z" }:
+  u"x < z":
+  ENTAILS"=>":
+  fassert{ "Factorial", u"x+1", u"y*(x+1)" }
 
-kb:defrule("compute"):
-  salience(0):
-  pattern{ "Factorial", "?x" }:
-  pattern{ "Result", "?y", "?z" }:
-  u(function(vars)
-      return vars.x == vars.y+1
-  end):
-  ENTAILS("=>"):
-  u(function(vars)
-      kb:fassert{ "Result", vars.x, vars.x * vars.z }
-  end)
+kb:fassert{ "Factorial", 1, 1 }
 
-kb:fassert{ "Result", 1, 1 }
-kb:fassert{ "Factorial", 10 }
+kb:fassert{ "Limit", 10 }
 
 kb:agenda()
 kb:run()

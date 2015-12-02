@@ -27,6 +27,16 @@ local tuple = require "tuple"
 -- module faces
 local faces = {}
 
+local globals = {}
+_G = setmetatable(_G, {
+                    __index=function(self,k) return rawget(self,k) or globals[k] end,
+                    
+                    __newindex=function(self,k,v)
+                      assert(not globals[k], ("Forbidden declaration of reserved global %s"):format(k))
+                      rawset(self,k,v)
+                    end,
+})
+
 ----------------------
 -- STATIC FUNCTIONS --
 ----------------------
@@ -64,6 +74,20 @@ local function lambda_transform(func_str)
     local f = lambda(code)
     return f(table.unpack(values))
   end
+end
+
+local function get_user_func(user_func)
+  -- user_func receives one argument: vars
+  if type(user_func) == "string" then
+    user_func = lambda_transform(user_func)
+  end
+  return user_func
+end
+
+globals.u = function(func_str)
+  local f = get_user_func(func_str)
+  return setmetatable({ __user_function__ = true },
+    { __call=function(_, ...) return f(...) end })
 end
 
 -- converts to in-mutable the given table argument
@@ -104,8 +128,9 @@ local function check_fact_strings(fact)
   end
 end
 
--- forward declaration
+-- forward declarations
 local replace_variables
+local replace_user_functions
 do
   local function replace(vi, vars)
     local new_v = {}
@@ -134,6 +159,21 @@ do
       new_args[i] = replace(vi, vars)
     end
     return new_args
+  end
+
+  replace_user_functions = function(args, vars)
+    local result = {}
+    for i,v in pairs(args) do
+      local tt = type(v)
+      if tt == "function" or tt == "table" and v.__user_function__ then
+        result[i] = v(vars)
+      elseif tt == "table" then
+        result[i] = replace_user_functions(v, vars)
+      else
+        result[i] = v
+      end
+    end
+    return result
   end
 end
 
@@ -517,13 +557,12 @@ function faces_methods:defrule(rule_name)
       return {
         pattern = function(_,...)
           return rule_builder.pattern(rule_builder,...)
-        end
+        end,
       }
     end,
-    u = function(rule_builder, func)
+    u = function(rule_builder, ...)
       -- user_func receives one argument: vars
-      if type(func) == "string" then func = lambda_transform(func) end
-      table.insert(rule.user_clauses, func)
+      table.insert(rule.user_clauses, get_user_func(...))
       return rule_builder
     end,
     salience = function(rule_builder, value)
@@ -552,25 +591,38 @@ function faces_methods:defrule(rule_name)
       return setmetatable({},{
           __index = function(rule_builder, key)
             if key == "u" then
-              return function(rule_builder, user_func)
+              return function(rule_builder, ...)
                 -- user_func receives one argument: vars
-                if type(func) == "string" then func = lambda_transform(func) end
-                table.insert(rule.actions, user_func)
+                table.insert(rule.actions, get_user_func(...))
                 return rule_builder
               end
-            elseif key ~= "fassert" then
-              error("Only fassert is allowed out of user defined RHS clause")
             else
               local f = assert(self[key], "Undefined function " .. key)
-              return function(rule_builder, ...)
-                local args = table.pack(...)
-                for i=1,args.n do args[i] = tuple(args[i]) end
-                table.insert(rule.actions,
-                             function(vars)
-                               local new_args = replace_variables(args, vars)
-                               return self[key](self, table.unpack(new_args))
-                end)
-                return rule_builder
+              if key == "fassert" then
+                return function(rule_builder, ...)
+                  local args = table.pack(...)
+                  table.insert(rule.actions,
+                               function(vars)
+                                 local args = replace_user_functions(args, vars)
+                                 for i=1,args.n do args[i] = tuple(args[i]) end
+                                 local new_args = replace_variables(args, vars)
+                                 return self[key](self, table.unpack(new_args))
+                  end)
+                  return rule_builder
+                end
+              elseif key == "retract" then
+                return function(rule_builder, ...)
+                  local args = table.pack(...)
+                  table.insert(rule.actions,
+                               function(vars)
+                                 local args = replace_user_functions(args, vars)
+                                 local new_args = replace_variables({ args }, vars)
+                                 return self[key](self, table.unpack(new_args[1]))
+                  end)
+                  return rule_builder
+                end
+              else
+                error("Key %s not available (it could be using user defined function")
               end
             end
           end

@@ -99,9 +99,8 @@ kb:facts()
 kb:defrule("MultiValuated"):
   pattern{ "duck sound", "$?p" }:
   ENTAILS("=>"):
-  u(function(vars)
-      print(vars.p)
-  end)
+u(function(vars) print(vars.p) end)
+
 kb:agenda()
 
 kb:run()

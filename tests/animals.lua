@@ -81,9 +81,7 @@ kb:defrule("RetractError"):
   var("?f1"):pattern{ "ERROR" }:
   pattern{ ANIMAL_IS, ".*" }:
   ENTAILS("=>"):
-  u(function(vars)
-      kb:retract(vars.f1)
-  end)
+  retract(u("f1"))
 
 -- Initial rule, asks the first question
 kb:defrule("initial"):
