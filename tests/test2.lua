@@ -12,9 +12,7 @@ kb:defrule("user"):
   pattern{ "AnimalIs", "?x" }:
   numeric("?y"):
   numeric("?z"):
-  u(function(fact_ids, vars)
-      return (vars.z == vars.y*4) and (vars.y % 2)==0
-  end):
+  u("(z == y*4) and (y%2)==0"):
   ENTAILS("=>"):
   fassert{ "EvenAnimal", "?x", "?y", "?z" }
 

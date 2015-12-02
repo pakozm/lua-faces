@@ -58,12 +58,12 @@ kb:fassert{ "duck sound", "poww" }
 
 kb:defrule("duck2"):
   salience(100):
-  pattern{ "duck sound", { "?name1", "?name2" } }:
+  var("?f1"):pattern{ "duck sound", { "?name1", "?name2" } }:
   match("?name1", "q.*"):
   ENTAILS("=>"):
   fassert{ "sound is", { "?name1", "?name2" } }:
-  u(function(fact_ids, vars)
-      print("DEBUG", kb:consult(fact_ids[1]), vars.name1, vars.name2)
+  u(function(vars)
+      print("DEBUG", kb:consult(vars.f1), vars.name1, vars.name2)
   end)
 
 kb:defrule("init"):
@@ -99,7 +99,7 @@ kb:facts()
 kb:defrule("MultiValuated"):
   pattern{ "duck sound", "$?p" }:
   ENTAILS("=>"):
-  u(function(fact_ids, vars)
+  u(function(vars)
       print(vars.p)
   end)
 kb:agenda()

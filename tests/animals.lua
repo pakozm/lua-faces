@@ -78,11 +78,11 @@ kb:defrule("Error"):
 -- Retracts error rule in case any classification is asserted
 kb:defrule("RetractError"):
   salience(100):
-  pattern{ "ERROR" }:
+  var("?f1"):pattern{ "ERROR" }:
   pattern{ ANIMAL_IS, ".*" }:
   ENTAILS("=>"):
-  u(function(fact_ids, vars)
-      kb:retract(fact_ids[1])
+  u(function(vars)
+      kb:retract(vars.f1)
   end)
 
 -- Initial rule, asks the first question
@@ -149,7 +149,7 @@ kb:defrule("Show"):
   salience(-10):
   pattern{ ANIMAL_IS, "?x" }:
   ENTAILS("=>"):
-  u(function(fact_ids,vars)
+  u(function(vars)
       print("The animal is a: " .. vars.x)
   end)
 
