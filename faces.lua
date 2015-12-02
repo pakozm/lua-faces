@@ -96,6 +96,7 @@ local function inmutable(tbl)
       __index = function(_,k) return tbl[k] end,
       __newindex = function() error("Unable to modify an in-mutable table") end,
       __len = function() return #tbl end,
+      __ipairs = function() return ipairs(tbl) end,
       __pairs = function() return pairs(tbl) end,
   })
 end
@@ -441,7 +442,7 @@ function faces_methods:fassert(fact, ...)
       update_forward_chaining_with_assert_fact(self, fact)
       return self.fact_map[fact],self:fassert(...)
     else
-      return false,self:fassert(...)
+      return self.fact_map[fact],self:fassert(...)
     end
   end
 end
