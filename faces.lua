@@ -24,6 +24,15 @@
 
 local tuple = require "tuple"
 
+local lenop = function(t) return #t end
+if _VERSION == "Lua 5.1" then
+  lenop = function(t)
+    local f = getmetatable(t) and getmetatable(t).__len
+    if f then return f(t) end
+    return #t
+  end
+end
+
 -- module faces
 local faces = {}
 
@@ -103,7 +112,7 @@ end
 
 -- pattern matching between a fact and the rule pattern
 local function fact_match(fact, pattern)
-  if #fact ~= #pattern then return false end
+  if lenop(fact) ~= lenop(pattern) then return false end
   local fact_str = tostring(fact):gsub('"', '')
   local pat_str = tostring(pattern):gsub("%.", "[^,]"):gsub('"', ''):
     gsub("%$%?[^%s,]+", "tuple%%b{}"):gsub("%?[^%s,]+", "[^,]*")
@@ -117,7 +126,7 @@ end
 
 -- check that the fact string doesn't contain forbidden symbols
 local function check_fact_strings(fact)
-  for i=1,#fact do
+  for i=1,lenop(fact) do
     local tt = type(fact[i])
     if tt == "table" then
       check_fact_strings(fact[i])
@@ -228,10 +237,10 @@ end
 local function enumerate(...)
   local function f(seq, tbl, ...)
     if tbl == nil and select('#', ...) == 0 then
-      if #seq > 0 then coroutine.yield(tuple(seq)) end
+      if lenop(seq) > 0 then coroutine.yield(tuple(seq)) end
     else
       if tbl ~= nil then
-        if #seq > 0 then
+        if lenop(seq) > 0 then
           for i,v in ipairs(tbl) do
             f(seq .. tuple(v), ...)
           end
@@ -259,7 +268,7 @@ local function regenerate_agenda(self)
     local rule_entailements = entailed[rule_name] or {}
     local combinations = {}
     local variables = {}
-    if #matches[rule_name] == #rule.patterns then
+    if lenop(matches[rule_name]) == lenop(rule.patterns) then
       for sequence in enumerate(table.unpack(matches[rule_name])) do
         if not rule_entailements[sequence] then
           local seq_vars = {}
@@ -271,7 +280,7 @@ local function regenerate_agenda(self)
           end
         end
       end
-      if #combinations > 0 then
+      if lenop(combinations) > 0 then
         table.insert(agenda, {
                        rule_name = rule_name,
                        salience = rule.salience,
@@ -290,13 +299,13 @@ end
 local function take_best_rule(self)
   if self.needs_regenerate_agenda then regenerate_agenda(self) end
   local rules_agenda = self.rules_agenda
-  if #rules_agenda > 0 then
+  if lenop(rules_agenda) > 0 then
     local rule_data = rules_agenda[1]
     local args = assert(table.remove(rule_data.combinations, 1),
                         "Found empty LHS args :'(")
     local vars = assert(table.remove(rule_data.variables, 1),
                         "Found empty LHS vars :'(")
-    if #rule_data.combinations == 0 then table.remove(rules_agenda, 1) end
+    if lenop(rule_data.combinations) == 0 then table.remove(rules_agenda, 1) end
     local rule_name = rule_data.rule_name
     return rule_name,args,vars
   end
@@ -318,7 +327,7 @@ end
 -- look-up value, p is the start position (by default it is 1) and q the end
 -- position (by default it is #tbl)
 local function bsearch(tbl, v, p, q)
-  p, q = p or 1, q or #tbl
+  p, q = p or 1, q or lenop(tbl)
   if p <= q then
     local n = q - p + 1
     if n < 30 then
@@ -490,7 +499,7 @@ function faces_methods:facts()
   for _,v in ipairs(facts) do
     print("f-" .. v[1], v[2])
   end
-  print(string.format("# For a total of %d facts", #facts))
+  print(string.format("# For a total of %d facts", lenop(facts)))
 end
 
 -- shows in screen all the available rules
@@ -554,7 +563,7 @@ function faces_methods:defrule(rule_name)
     var = function(rule_builder, varname)
       varname = assert(varname:match("%?([^%s]+)"),
                        string.format("Incorrect variable name: %s", varname))
-      rule.fact_vars[varname] = #rule.patterns + 1
+      rule.fact_vars[varname] = lenop(rule.patterns) + 1
       return {
         pattern = function(_,...)
           return rule_builder.pattern(rule_builder,...)

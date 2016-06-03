@@ -36,18 +36,46 @@ local tuple = {
   _NAME = "tuple",
 }
 
+local lenop = function(t) return #t end
+
 if _VERSION ~= "Lua 5.3" then
   -- the following hack is needed to allow unpack over tuples
   local table = require "table"
   local function table_unpack(t,i,n)
     i = i or 1
-    n = n or #t
+    n = n or lenop(t)
     if i <= n then
       return t[i], table_unpack(t, i + 1, n)
     end
   end
   table.unpack = table_unpack
   unpack = table_unpack
+
+  if _VERSION == "Lua 5.1" then
+    bit32 = require "bit32"
+    table.pack = function(...)
+      local t={...}
+      t.n=select('#',...)
+      return t
+    end
+    lenop = function(t)
+      local f = getmetatable(t) and getmetatable(t).__len
+      if f then return f(t) end
+      return #t
+    end
+    local function metatable_wrapper(old_func, mt_field)
+      return function(tbl,...)
+        print(mt_field, tbl, ...)
+        print(lenop(tbl))
+        local f = getmetatable(t) and getmetatable(t)[mt_field]
+        print(getmetatable(t), f)
+        if f then return f(tbl,...) end
+        return old_func(tbl,...)      
+      end
+    end
+    _G.ipairs = metatable_wrapper(_G.ipairs, "__ipairs")
+    _G.pairs  = metatable_wrapper(_G.pairs,  "__pairs")
+  end
 end
 
 -- libraries import
@@ -120,7 +148,7 @@ end
 -- computes the hash of a given tuple candidate
 compute_hash = function(t)
   local h = 0
-  for i=1,#t do
+  for i=1,lenop(t) do
     local v = t[i]
     -- hash computation for every byte number in iterator over v
     for j,c in iterate(v) do
@@ -149,15 +177,16 @@ local tuple_instance_mt = {
   __concat = function(a,b)
     if type(a) ~= "table" then a,b=b,a end
     local aux = {}
-    for i=1,#a do aux[#aux+1] = a[i] end
+    for i=1,lenop(a) do aux[lenop(aux)+1] = a[i] end
     if type(b) == "table" then
-      for i=1,#b do aux[#aux+1] = b[i] end
+      for i=1,lenop(b) do aux[lenop(aux)+1] = b[i] end
     else
-      aux[#aux+1] = b
+      aux[lenop(aux)+1] = b
     end
     return tuple(aux)
   end,
 }
+if _VERSION == "Lua 5.1" then tuple_instance_mt.__metatable = nil end
 
 -- functions for accessing tuple metadata
 local unwrap = function(self) return tuples_metadata[self][1] end
@@ -173,25 +202,23 @@ local proxy_metatable = {
   __tostring = function(self)
     local t = unwrap(self)
     local result = {}
-    for i=1,#self do
+    for i=1,lenop(self) do
       local v = t[i]
       if type(v) == "string" then v = string_format("%q",v) end
-      result[#result+1] = tostring(v)
+      result[lenop(result)+1] = tostring(v)
     end
     return table_concat({"tuple{",table_concat(result, ", "),"}"}, " ")
   end,
   __lt = function(self,other)
     local t = unwrap(self)
-    if type(other) ~= "table" then return false
-    elseif #t < #other then return true
-    elseif #t > #other then return false
-    elseif t == other then return false
-    else
-      for i=1,#t do
-	if t[i] > other[i] then return false end
-      end
-      return true
+    if type(other) ~= "table" then return false end
+    if lenop(t) < lenop(other) then return true end
+    if lenop(t) > lenop(other) then return false end
+    if t == other then return false end
+    for i=1,lenop(t) do
+      if t[i] > other[i] then return false end
     end
+    return true
   end,
   __le =  function(self,other)
     local t = unwrap(self)
@@ -213,6 +240,9 @@ local proxy_metatable = {
   end,
   __mode = "v",
 }
+if _VERSION == "Lua 5.1" then
+  proxy_metatable.__metatable = nil
+end  
 
 -- returns a wrapper table (proxy) which shades the data table, allowing
 -- in-mutability in Lua, it receives the table data and the number of elements
@@ -222,6 +252,7 @@ local function proxy(tpl,n)
   -- the proxy table has an in-mutable metatable, and stores in tuples_metadata
   -- the real tuple data and the number of elements
   tuples_metadata[ref] = { tpl, n }
+  assert(lenop(tpl) == lenop(ref))
   return ref
 end
 
@@ -229,7 +260,7 @@ end
 -- tuples
 local function tuple_constructor(t)
   -- take n from the variadic args or from t length
-  local n = t.n or #t
+  local n = t.n or lenop(t)
   local new_tuple = { }
   for i=1,n do
     local v = t[i]
@@ -251,7 +282,7 @@ local tuple_mt = {
   -- tuple constructor doesn't allow table loops
   __call = function(self, ...)
     local n = select('#', ...)
-    local t = table_pack(...) assert(#t == n) if #t == 1 then t = t[1] end
+    local t = table_pack(...) assert(lenop(t) == n) if lenop(t) == 1 then t = t[1] end
     if type(t) ~= "table" then
       -- non-table elements are unpacked when only one is given
       return t
@@ -272,8 +303,8 @@ local tuple_mt = {
       for i,vi in pairs(bucket) do
 	local equals = true
 	-- check equality by comparing all the elements one-by-one
-        if #vi == #new_tuple then
-          for j=1,#vi do
+        if lenop(vi) == lenop(new_tuple) then
+          for j=1,lenop(vi) do
             local vj = vi[j]
             if vj ~= new_tuple[j] then equals=false break end
           end
